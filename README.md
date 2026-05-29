@@ -56,7 +56,7 @@ docker-compose up --build -d
 ```
 Lưu ý: Lần đầu khởi chạy sẽ mất khoảng 5-10 phút để Docker tải Ubuntu, các thư viện PyTorch và thiết lập MySQL.
 
-** Hướng Dẫn Sử Dụng Dashboard **
+- **Hướng dẫn sử dụng Dashboard:**
 Mở trình duyệt web và truy cập: http://localhost:8000
 
 Tại khu vực Cấu Hình Hệ Thống:
