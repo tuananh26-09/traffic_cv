@@ -81,7 +81,6 @@ def generate_frames(video_path, mode="count", coords=None, distance=20.0):
             SOURCE = np.array(coords, dtype=np.int32)
             
         TARGET_WIDTH = 10
-        # Gán chiều dài từ Web xuống, chống lỗi chia 0
         TARGET_HEIGHT = int(distance) if distance > 0 else 20 
         
         TARGET = np.array([
@@ -150,7 +149,6 @@ def generate_frames(video_path, mode="count", coords=None, distance=20.0):
                     if is_in: in_counts[class_name] += 1
                     if is_out: out_counts[class_name] += 1
 
-            # Ghi Database cho chế độ đếm (Lưu tốc độ = 0)
             if db and cursor and hasattr(detections, 'tracker_id') and detections.tracker_id is not None:
                 for track_id in detections.tracker_id:
                     if track_id not in saved_ids:
@@ -205,7 +203,7 @@ def generate_frames(video_path, mode="count", coords=None, distance=20.0):
                 else:
                     coordinate_start = coordinates[tracker_id][-1]
                     coordinate_end = coordinates[tracker_id][0]
-                    # Đã fix lỗi trùng tên biến "distance"
+                   
                     moved_dist = abs(coordinate_start - coordinate_end) 
                     time_elapsed = len(coordinates[tracker_id]) / fps
                     
