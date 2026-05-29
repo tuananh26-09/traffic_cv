@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+jinja2
+sqlalchemy
+pymysql
+opencv-python
+numpy
+ultralytics
+supervision
+mysql-connector-python
+python-multipart
+
+
