@@ -160,7 +160,7 @@
             object-fit: contain;
             display: block;
         }
-       
+        
         #controlsOverlay {
             position: absolute;
             bottom: 20px;
@@ -205,6 +205,10 @@
                                 <option value="count">Đếm xe & Phát hiện ngược chiều</option>
                                 <option value="speed">Đo tốc độ phương tiện</option>
                             </select>
+                        </div>
+                        <div class="form-group" id="distanceGroup" style="display: none;">
+                        <label for="distanceInput">Chiều dài vùng đo tốc độ (mét)</label>
+                        <input type="number" id="distanceInput" value="20" min="1" step="1" title="Ước lượng qua vạch kẻ đường hoặc chiều dài xe">
                         </div>
                         <button type="submit" id="mainUploadBtn">Tải Lên & Thiết Lập</button>
                     </form>
@@ -257,6 +261,7 @@
         const videoStream = document.getElementById("videoStream");
         const mainUploadBtn = document.getElementById("mainUploadBtn");
 
+
         const setupCanvas = document.getElementById("setupCanvas");
         const controlsOverlay = document.getElementById("controlsOverlay");
         const instructionText = document.getElementById("instructionText");
@@ -270,7 +275,11 @@
         let bgImage = new Image();
         let isStreaming = false; 
 
+  
         modeSelect.addEventListener("change", () => {
+            const distanceGroup = document.getElementById("distanceGroup");
+            distanceGroup.style.display = (modeSelect.value === "speed") ? "block" : "none";
+
             if (isStreaming) {
                 videoStream.src = `/video_feed?mode=${modeSelect.value}&t=${new Date().getTime()}`;
             } else {
@@ -278,6 +287,8 @@
                 updateInstruction();
             }
         });
+
+
 
         function clearCanvas() {
             points = [];
@@ -327,7 +338,7 @@
                     origHeight = data.height;
                     setupCanvas.width = origWidth;
                     setupCanvas.height = origHeight;
-                    
+
                     isStreaming = false;
                     videoStream.style.display = "none";
                     setupCanvas.style.display = "block";
@@ -348,6 +359,7 @@
                 mainUploadBtn.disabled = false;
             }
         });
+
 
         setupCanvas.addEventListener("mousedown", (e) => {
             if (points.length >= 4) return;
@@ -383,11 +395,12 @@
 
         startAiBtn.addEventListener("click", async () => {
             const currentMode = modeSelect.value;
-            
+            const currentDistance = document.getElementById("distanceInput").value;
+
             await fetch("/set_config", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ mode: currentMode, coords: points })
+                body: JSON.stringify({ mode: currentMode, coords: points, distance: currentDistance })
             });
 
             setupCanvas.style.display = "none";
@@ -409,7 +422,8 @@
                     document.getElementById("re").innerText = data.reverse;
                     document.getElementById("p").innerText = data.plate;
                 }
-            } catch (err) {}
+            } catch (err) {
+            }
         }
         setInterval(fetchSystemStats, 1000);
         fetchSystemStats();
