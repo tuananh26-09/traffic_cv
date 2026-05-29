@@ -6,13 +6,11 @@ import supervision as sv
 import mysql.connector
 import torch
 
-# ==========================================
-# 1. KHỞI TẠO MÔ HÌNH Y TẾ & DATABASE GLOABAL
-# ==========================================
+
+# 1. KHỞI TẠO MÔ HÌNH
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Đang sử dụng thiết bị: {device}")
 
-# Ưu tiên dùng engine TensorRT nếu có để tối ưu tốc độ, nếu không dùng file .pt
 try:
     model = YOLO("models/yolo11l.engine")
     print("Đã tải mô hình TensorRT")
@@ -30,9 +28,8 @@ def get_db_connection():
         database="traffic_db"
     )
 
-# ==========================================
-# 2. CẤU HÌNH VÀ HÀM PHỤ TRỢ CHO ĐẾM XE (COUNT)
-# ==========================================
+# 2. CẤU HÌNH VÀ HÀM ĐẾM XE
+
 DIVIDER_START = sv.Point(460, 510)
 DIVIDER_END   = sv.Point(862, 1054)
 LINE_START = sv.Point(0, 689)
@@ -79,9 +76,9 @@ def draw_stats_panel(frame, in_counts, out_counts):
     cv2.putText(frame, f"TOTAL: {total_in} | {total_out}", (30, y_pos+15), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
     return frame
 
-# ==========================================
+
 # 3. CẤU HÌNH VÀ CLASS CHO ĐO TỐC ĐỘ (SPEED)
-# ==========================================
+
 SOURCE = np.array([[481, 60], [773, 56], [1210, 409], [17, 402]])
 TARGET_WIDTH = 10
 TARGET_HEIGHT = 50
@@ -103,16 +100,15 @@ class ViewTransformer:
         return transformed_points.reshape(-1, 2)
 
 
-# ==========================================
 # 4. HÀM STREAM GENERATOR CHÍNH
-# ==========================================
+
+
 def generate_frames(video_path, mode="count"):
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
     
     byte_track = sv.ByteTrack(frame_rate=int(fps))
     
-    # Annotators cơ bản
     box_annotator = sv.BoxAnnotator(thickness=2)
     label_annotator = sv.LabelAnnotator(text_scale=0.6, text_thickness=1)
     
@@ -155,9 +151,8 @@ def generate_frames(video_path, mode="count"):
         detections = detections[np.isin(detections.class_id, [2, 3, 5, 7])]
         detections = detections[detections.confidence > 0.25]
 
-        # ----------------------------------------------------
+       
         # CHẾ ĐỘ ĐẾM XE & PHÁT HIỆN SAI LÀN
-        # ----------------------------------------------------
         if mode == "count":
             detections = byte_track.update_with_detections(detections=detections)
             
@@ -220,9 +215,8 @@ def generate_frames(video_path, mode="count"):
 
             annotated_frame = draw_stats_panel(annotated_frame, in_counts, out_counts)
 
-        # ----------------------------------------------------
         # CHẾ ĐỘ ĐO TỐC ĐỘ
-        # ----------------------------------------------------
+        
         elif mode == "speed":
             detections = detections[polygon_zone.trigger(detections)]
             detections = byte_track.update_with_detections(detections=detections)
@@ -247,6 +241,21 @@ def generate_frames(video_path, mode="count"):
                     
                     speed = distance / time_elapsed * 3.6
                     labels.append(f"#{tracker_id} {class_name} {int(speed)} km/h")
+                    if db and cursor and tracker_id not in saved_ids:
+                        saved_ids.add(tracker_id)
+                        vehicle_number += 1
+                        try:
+                            cursor.execute(
+                                """
+                                INSERT INTO vehicles
+                                (vehicle_id, speed, vehicle_number)
+                                VALUES (%s,%s,%s)
+                                """,
+                                (int(tracker_id), float(speed), vehicle_number)
+                            )
+                            db.commit()
+                        except Exception as e:
+                            print(f"Lỗi khi insert DB: {e}")
 
             # Vẽ UI cho chế độ Speed
             cv2.polylines(annotated_frame, [SOURCE.astype(np.int32)], True, (0, 0, 255), 2)
@@ -254,9 +263,7 @@ def generate_frames(video_path, mode="count"):
             annotated_frame = box_annotator.annotate(scene=annotated_frame, detections=detections)
             annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=detections, labels=labels)
 
-        # ----------------------------------------------------
-        # GHI DỮ LIỆU VÀO DATABASE (Áp dụng chung)
-        # ----------------------------------------------------
+        # GHI DỮ LIỆU VÀO DATABASE
         if db and cursor and hasattr(detections, 'tracker_id') and detections.tracker_id is not None:
             for track_id in detections.tracker_id:
                 if track_id not in saved_ids:
@@ -280,9 +287,8 @@ def generate_frames(video_path, mode="count"):
                     except Exception as e:
                         print(f"Lỗi khi insert DB: {e}")
 
-        # ----------------------------------------------------
+        
         # ENCODE VÀ STREAM LÊN WEB
-        # ----------------------------------------------------
         _, buffer = cv2.imencode(".jpg", annotated_frame)
         frame_bytes = buffer.tobytes()
         
