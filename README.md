@@ -3,9 +3,6 @@
 
 Dự án phát triển hệ thống camera giám sát giao thông thông minh ứng dụng Trí tuệ nhân tạo (Computer Vision). Hệ thống có khả năng nhận diện, theo dõi, đếm lưu lượng, phát hiện hành vi đi ngược chiều và ước lượng tốc độ phương tiện theo thời gian thực thông qua Dashboard Web trực quan.
 
-**Tác giả:** Nguyễn Tuấn Anh  
-**Đồ án:** Khoá luận tốt nghiệp chuyên ngành Trí tuệ nhân tạo  
-
 ---
 
 ## ✨ Tính Năng Nổi Bật
