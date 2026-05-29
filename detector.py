@@ -102,7 +102,6 @@ class ViewTransformer:
 
 # 4. HÀM STREAM GENERATOR CHÍNH
 
-
 def generate_frames(video_path, mode="count", coords=None):
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
@@ -111,7 +110,6 @@ def generate_frames(video_path, mode="count", coords=None):
     box_annotator = sv.BoxAnnotator(thickness=2)
     label_annotator = sv.LabelAnnotator(text_scale=0.6, text_thickness=1)
     
-    # Khởi tạo state tùy theo chế độ
     if mode == "count":
         # Mặc định
         div_start, div_end = sv.Point(460, 510), sv.Point(862, 1054)
@@ -134,14 +132,13 @@ def generate_frames(video_path, mode="count", coords=None):
         out_counts = defaultdict(int)
         
     elif mode == "speed":
-        # Mặc định
         SOURCE = np.array([[481, 60], [773, 56], [1210, 409], [17, 402]])
         
         if coords and len(coords) == 4:
             SOURCE = np.array(coords, dtype=np.int32)
             
         TARGET_WIDTH = 10
-        TARGET_HEIGHT = 50
+        TARGET_HEIGHT = int(distance) if distance > 0 else 20
         TARGET = np.array([
             [0, 0], [TARGET_WIDTH - 1, 0],
             [TARGET_WIDTH - 1, TARGET_HEIGHT - 1], [0, TARGET_HEIGHT - 1],
@@ -152,7 +149,6 @@ def generate_frames(video_path, mode="count", coords=None):
         coordinates = defaultdict(lambda: deque(maxlen=int(fps)))
         trace_annotator = sv.TraceAnnotator(thickness=2, trace_length=int(fps * 2))
 
-    # Cấu hình Database
     try:
         db = get_db_connection()
         cursor = db.cursor()
@@ -169,15 +165,13 @@ def generate_frames(video_path, mode="count", coords=None):
             break
             
         annotated_frame = frame.copy()
-        
-        # Inference bằng YOLO
+
         result = model(frame, verbose=False)[0]
         detections = sv.Detections.from_ultralytics(result)
         detections = detections[np.isin(detections.class_id, [2, 3, 5, 7])]
         detections = detections[detections.confidence > 0.25]
 
        
-        # CHẾ ĐỘ ĐẾM XE & PHÁT HIỆN SAI LÀN
         if mode == "count":
             detections = byte_track.update_with_detections(detections=detections)
             
@@ -214,7 +208,6 @@ def generate_frames(video_path, mode="count", coords=None):
                     if is_in: in_counts[class_name] += 1
                     if is_out: out_counts[class_name] += 1
 
-
             cv2.line(annotated_frame, (DIVIDER_START.x, DIVIDER_START.y), (DIVIDER_END.x, DIVIDER_END.y), (0, 255, 255), 3)
             line_annotator.annotate(annotated_frame, line_counter=line_zone)
             
@@ -240,7 +233,6 @@ def generate_frames(video_path, mode="count", coords=None):
 
             annotated_frame = draw_stats_panel(annotated_frame, in_counts, out_counts)
 
-        # CHẾ ĐỘ ĐO TỐC ĐỘ
         
         elif mode == "speed":
             detections = detections[polygon_zone.trigger(detections)]
@@ -287,7 +279,6 @@ def generate_frames(video_path, mode="count", coords=None):
             annotated_frame = box_annotator.annotate(scene=annotated_frame, detections=detections)
             annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=detections, labels=labels)
 
-        # GHI DỮ LIỆU VÀO DATABASE
         if db and cursor and hasattr(detections, 'tracker_id') and detections.tracker_id is not None:
             for track_id in detections.tracker_id:
                 if track_id not in saved_ids:
@@ -310,7 +301,6 @@ def generate_frames(video_path, mode="count", coords=None):
                         print(f"Lỗi khi insert DB: {e}")
 
         
-        # ENCODE VÀ STREAM LÊN WEB
         _, buffer = cv2.imencode(".jpg", annotated_frame)
         frame_bytes = buffer.tobytes()
         
