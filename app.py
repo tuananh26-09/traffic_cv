@@ -8,11 +8,10 @@ from detector import generate_frames
 
 app = FastAPI()
 
-# Đảm bảo thư mục lưu trữ mã giao diện tồn tại
 os.makedirs("templates", exist_ok=True)
 templates = Jinja2Templates(directory="templates")
 
-# Đường dẫn tệp video mặc định hoặc được cập nhật khi upload
+# Đường dẫn tệp video
 VIDEO_PATH = "video.mp4"
 
 @app.get("/", response_class=HTMLResponse)
@@ -25,10 +24,6 @@ async def home(request: Request):
 
 @app.get("/stats")
 def get_stats():
-    """
-    Đọc dữ liệu thống kê thời gian thực từ MySQL Database để hiển thị lên Dashboard.
-    Có cơ chế xử lý ngoại lệ nếu kết nối đến container DB bị gián đoạn.
-    """
     try:
         conn = mysql.connector.connect(
             host="mysql",
@@ -53,8 +48,8 @@ def get_stats():
         return {
             "vehicles": total_vehicles,
             "speed": avg_speed,
-            "red": 0,          # Có thể mở rộng đếm từ bảng violations sau
-            "reverse": 0,      # Có thể mở rộng đếm từ bảng violations sau
+            "red": 0,          
+            "reverse": 0,     
             "plate": "xxA-xxx.xx"
         }
     except Exception:
