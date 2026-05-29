@@ -103,10 +103,9 @@ class ViewTransformer:
 # 4. HÀM STREAM GENERATOR CHÍNH
 
 
-def generate_frames(video_path, mode="count"):
+def generate_frames(video_path, mode="count", coords=None):
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
-    
     byte_track = sv.ByteTrack(frame_rate=int(fps))
     
     box_annotator = sv.BoxAnnotator(thickness=2)
@@ -114,14 +113,43 @@ def generate_frames(video_path, mode="count"):
     
     # Khởi tạo state tùy theo chế độ
     if mode == "count":
-        line_zone = sv.LineZone(start=LINE_START, end=LINE_END)
+        # Mặc định
+        div_start, div_end = sv.Point(460, 510), sv.Point(862, 1054)
+        line_start, line_end = sv.Point(0, 689), sv.Point(1234, 679)
+        
+        # Nếu người dùng đã click 4 điểm trên web (2 điểm phân làn, 2 điểm đếm xe)
+        if coords and len(coords) == 4:
+            div_start = sv.Point(int(coords[0][0]), int(coords[0][1]))
+            div_end = sv.Point(int(coords[1][0]), int(coords[1][1]))
+            line_start = sv.Point(int(coords[2][0]), int(coords[2][1]))
+            line_end = sv.Point(int(coords[3][0]), int(coords[3][1]))
+            
+        line_zone = sv.LineZone(start=line_start, end=line_end)
         line_annotator = sv.LineZoneAnnotator(thickness=2, text_thickness=1, text_scale=0.5)
+        
+        # Truyền tọa độ vào logic kiểm tra
+        DIVIDER_START, DIVIDER_END = div_start, div_end
+        
         track_history = defaultdict(lambda: deque(maxlen=30))
         wrong_way_ids = set()
         in_counts = defaultdict(int)
         out_counts = defaultdict(int)
         
     elif mode == "speed":
+        # Mặc định
+        SOURCE = np.array([[481, 60], [773, 56], [1210, 409], [17, 402]])
+        
+        # Nếu người dùng đã click 4 điểm
+        if coords and len(coords) == 4:
+            SOURCE = np.array(coords, dtype=np.int32)
+            
+        TARGET_WIDTH = 10
+        TARGET_HEIGHT = 50
+        TARGET = np.array([
+            [0, 0], [TARGET_WIDTH - 1, 0],
+            [TARGET_WIDTH - 1, TARGET_HEIGHT - 1], [0, TARGET_HEIGHT - 1],
+        ])
+        
         polygon_zone = sv.PolygonZone(polygon=SOURCE)
         view_transformer = ViewTransformer(source=SOURCE, target=TARGET)
         coordinates = defaultdict(lambda: deque(maxlen=int(fps)))
