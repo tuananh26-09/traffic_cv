@@ -73,16 +73,3 @@ Tại mục Chế Độ Phân Tích, chọn 1 trong 2 tính năng:
 Đo tốc độ phương tiện
 
 Nhấn Tải Lên & Khởi Chạy để quan sát luồng stream xử lý AI ở khung màn hình bên phải. Bạn có thể chuyển đổi qua lại giữa các chế độ bất kỳ lúc nào mà không cần tải lại trang.
-
-📁 Cấu Trúc Thư Mục Cốt Lõi
-Plaintext
-📦 traffic_project
- ┣ 📂 models/             # Thư mục chứa trọng số YOLO (yolo11l.pt)
- ┣ 📂 static/             # Chứa tài nguyên Web tĩnh (CSS, JS)
- ┣ 📂 templates/          # Chứa file giao diện index.html
- ┣ 📜 app.py              # Xử lý Backend API & Điều hướng Web
- ┣ 📜 detector.py         # Chứa Core Logic AI (YOLO, Tracker, Tính toán)
- ┣ 📜 init.sql            # Script tự động khởi tạo Bảng dữ liệu MySQL
- ┣ 📜 docker-compose.yml  # Cấu hình liên kết các container (API & DB)
- ┣ 📜 dockerfile          # Hướng dẫn build môi trường Python AI
- ┗ 📜 requirement.txt     # Danh sách thư viện Python phụ thuộc
