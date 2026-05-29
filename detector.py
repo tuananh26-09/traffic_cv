@@ -77,7 +77,7 @@ def draw_stats_panel(frame, in_counts, out_counts):
     return frame
 
 
-# 3. CẤU HÌNH VÀ CLASS CHO ĐO TỐC ĐỘ (SPEED)
+# 3. CẤU HÌNH VÀ CLASS CHO ĐO TỐC ĐỘ
 
 SOURCE = np.array([[481, 60], [773, 56], [1210, 409], [17, 402]])
 TARGET_WIDTH = 10
@@ -117,7 +117,6 @@ def generate_frames(video_path, mode="count", coords=None):
         div_start, div_end = sv.Point(460, 510), sv.Point(862, 1054)
         line_start, line_end = sv.Point(0, 689), sv.Point(1234, 679)
         
-        # Nếu người dùng đã click 4 điểm trên web (2 điểm phân làn, 2 điểm đếm xe)
         if coords and len(coords) == 4:
             div_start = sv.Point(int(coords[0][0]), int(coords[0][1]))
             div_end = sv.Point(int(coords[1][0]), int(coords[1][1]))
@@ -127,7 +126,6 @@ def generate_frames(video_path, mode="count", coords=None):
         line_zone = sv.LineZone(start=line_start, end=line_end)
         line_annotator = sv.LineZoneAnnotator(thickness=2, text_thickness=1, text_scale=0.5)
         
-        # Truyền tọa độ vào logic kiểm tra
         DIVIDER_START, DIVIDER_END = div_start, div_end
         
         track_history = defaultdict(lambda: deque(maxlen=30))
@@ -139,7 +137,6 @@ def generate_frames(video_path, mode="count", coords=None):
         # Mặc định
         SOURCE = np.array([[481, 60], [773, 56], [1210, 409], [17, 402]])
         
-        # Nếu người dùng đã click 4 điểm
         if coords and len(coords) == 4:
             SOURCE = np.array(coords, dtype=np.int32)
             
@@ -217,7 +214,7 @@ def generate_frames(video_path, mode="count", coords=None):
                     if is_in: in_counts[class_name] += 1
                     if is_out: out_counts[class_name] += 1
 
-            # Vẽ UI cho chế độ Count
+
             cv2.line(annotated_frame, (DIVIDER_START.x, DIVIDER_START.y), (DIVIDER_END.x, DIVIDER_END.y), (0, 255, 255), 3)
             line_annotator.annotate(annotated_frame, line_counter=line_zone)
             
@@ -285,7 +282,6 @@ def generate_frames(video_path, mode="count", coords=None):
                         except Exception as e:
                             print(f"Lỗi khi insert DB: {e}")
 
-            # Vẽ UI cho chế độ Speed
             cv2.polylines(annotated_frame, [SOURCE.astype(np.int32)], True, (0, 0, 255), 2)
             annotated_frame = trace_annotator.annotate(scene=annotated_frame, detections=detections)
             annotated_frame = box_annotator.annotate(scene=annotated_frame, detections=detections)
@@ -298,8 +294,6 @@ def generate_frames(video_path, mode="count", coords=None):
                     saved_ids.add(track_id)
                     vehicle_number += 1
                     
-                    # Hiện tại đang gán cứng speed = 60 theo source cũ của bạn.
-                    # Bạn có thể phát triển thêm để lấy chính xác tốc độ từ dict `speed` ở trên.
                     speed_db = 60 
                     
                     try:
