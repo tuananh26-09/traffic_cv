@@ -152,12 +152,35 @@
             border: 2px solid var(--card-bg);
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
             min-height: 550px;
+            position: relative; /* Cần thiết để chứa Canvas và Overlay */
         }
         .video-container img {
             width: 100%;
             height: auto;
             object-fit: contain;
             display: block;
+        }
+        /* Style bổ sung cho lớp phủ điều khiển Canvas */
+        #controlsOverlay {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+            display: none;
+        }
+        .overlay-box {
+            background: rgba(15, 23, 42, 0.85);
+            padding: 12px 20px;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid #334155;
+        }
+        .overlay-btn {
+            width: auto;
+            margin: 0 5px;
+            padding: 8px 15px;
+            font-size: 0.9rem;
         }
     </style>
 </head>
@@ -183,7 +206,7 @@
                                 <option value="speed">Đo tốc độ phương tiện</option>
                             </select>
                         </div>
-                        <button type="submit">Tải Lên & Khởi Chạy</button>
+                        <button type="submit" id="mainUploadBtn">Tải Lên & Thiết Lập</button>
                     </form>
                 </div>
 
@@ -213,7 +236,17 @@
             </div>
 
             <div class="video-container">
-                <img id="videoStream" src="/video_feed?mode=count" alt="AI Video Stream">
+                <canvas id="setupCanvas" style="display: none; width: 100%; max-height: 720px; cursor: crosshair;"></canvas>
+                
+                <img id="videoStream" src="" alt="AI Video Stream" style="display: none;">
+                
+                <div id="controlsOverlay">
+                    <div class="overlay-box">
+                        <span id="instructionText" style="color: #38bdf8; font-weight: bold; margin-right: 15px;">Hãy click chọn 4 điểm trên khung hình...</span>
+                        <button type="button" class="overlay-btn" id="clearBtn" style="background: #f87171;">Làm Lại</button>
+                        <button type="button" class="overlay-btn" id="startAiBtn" style="background: #4ade80; color: #0f172a;" disabled>Chạy AI</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -222,20 +255,65 @@
         const form = document.getElementById("uploadForm");
         const modeSelect = document.getElementById("modeSelect");
         const videoStream = document.getElementById("videoStream");
+        const mainUploadBtn = document.getElementById("mainUploadBtn");
 
-        // Hàm cập nhật đường dẫn luồng stream theo mode đã chọn
-        function updateVideoStream() {
-            const currentMode = modeSelect.value;
-            // Thêm giá trị thời gian nhằm loại bỏ hiện tượng trình duyệt lưu cache ảnh stream cũ
-            videoStream.src = `/video_feed?mode=${currentMode}&t=${new Date().getTime()}`;
-        }
+        // Các thành phần UI mới cho việc setup tọa độ
+        const setupCanvas = document.getElementById("setupCanvas");
+        const controlsOverlay = document.getElementById("controlsOverlay");
+        const instructionText = document.getElementById("instructionText");
+        const clearBtn = document.getElementById("clearBtn");
+        const startAiBtn = document.getElementById("startAiBtn");
 
-        // Tự động chuyển mode xử lý trực tiếp khi người dùng thay đổi lựa chọn ở dropdown
+        let ctx = setupCanvas.getContext("2d");
+        let points = [];
+        let origWidth = 0;
+        let origHeight = 0;
+        let bgImage = new Image();
+        let isStreaming = false; // Phân biệt hệ thống đang ở màn hình cài đặt hay đang chạy AI
+
+        // --- XỬ LÝ SỰ KIỆN CHUYỂN ĐỔI CHẾ ĐỘ ---
         modeSelect.addEventListener("change", () => {
-            updateVideoStream();
+            if (isStreaming) {
+                // Nếu đang stream, đổi luồng AI lập tức
+                videoStream.src = `/video_feed?mode=${modeSelect.value}&t=${new Date().getTime()}`;
+            } else {
+                // Nếu đang ở bước Setup, reset lại các điểm vẽ
+                clearCanvas();
+                updateInstruction();
+            }
         });
 
-        // Xử lý logic tải video lên server
+        // --- HÀM XÓA & RESET CANVAS ---
+        function clearCanvas() {
+            points = [];
+            if (origWidth > 0 && origHeight > 0) {
+                ctx.clearRect(0, 0, setupCanvas.width, setupCanvas.height);
+                ctx.drawImage(bgImage, 0, 0, origWidth, origHeight);
+            }
+            updateInstruction();
+        }
+        clearBtn.addEventListener("click", clearCanvas);
+
+        // --- HÀM CẬP NHẬT TEXT HƯỚNG DẪN ---
+        function updateInstruction() {
+            const mode = modeSelect.value;
+            if (mode === "count") {
+                instructionText.innerText = `Đếm Xe: Chọn ${points.length}/4 điểm (2 điểm đường phân làn, 2 điểm vạch đếm)`;
+            } else {
+                instructionText.innerText = `Đo Tốc Độ: Chọn ${points.length}/4 điểm (Vẽ vùng Polygon góc quay)`;
+            }
+            
+            // Kích hoạt nút chạy khi đủ 4 điểm
+            startAiBtn.disabled = points.length < 4;
+            if (points.length === 4) {
+                instructionText.innerText = "Tuyệt vời! Đã lấy đủ tọa độ. Hãy bấm Chạy AI.";
+                instructionText.style.color = "#4ade80";
+            } else {
+                instructionText.style.color = "#38bdf8";
+            }
+        }
+
+        // --- BƯỚC 1: UPLOAD & TRÍCH XUẤT KHUNG HÌNH ĐẦU TIÊN ---
         form.addEventListener("submit", async (e) => {
             e.preventDefault();
             const fileInput = document.getElementById("videoFile");
@@ -244,32 +322,102 @@
             const formData = new FormData();
             formData.append("file", fileInput.files[0]);
 
-            const submitBtn = form.querySelector("button");
-            const originalText = submitBtn.innerText;
-            submitBtn.innerText = "Đang tải video lên...";
-            submitBtn.disabled = true;
+            const originalText = mainUploadBtn.innerText;
+            mainUploadBtn.innerText = "Đang trích xuất...";
+            mainUploadBtn.disabled = true;
 
             try {
-                const response = await fetch("/upload", {
-                    method: "POST",
-                    body: formData
-                });
+                const response = await fetch("/upload", { method: "POST", body: formData });
                 if (response.ok) {
-                    // Tải thành công thì làm mới luồng stream video ngay lập tức
-                    updateVideoStream();
+                    const data = await response.json();
+                    
+                    // Setup kích thước chuẩn của Canvas theo Video
+                    origWidth = data.width;
+                    origHeight = data.height;
+                    setupCanvas.width = origWidth;
+                    setupCanvas.height = origHeight;
+                    
+                    // Ẩn Video Stream, Hiện Canvas Cài đặt
+                    isStreaming = false;
+                    videoStream.style.display = "none";
+                    setupCanvas.style.display = "block";
+                    controlsOverlay.style.display = "block";
+                    
+                    // Vẽ ảnh Frame đầu lên Canvas
+                    bgImage.src = data.frame_url + "?t=" + new Date().getTime();
+                    bgImage.onload = () => {
+                        clearCanvas();
+                    };
                 } else {
-                    alert("Tải video lên thất bại.");
+                    alert("Lỗi khi tải video lên server.");
                 }
             } catch (err) {
-                console.error("Lỗi kết nối:", err);
-                alert("Đã xảy ra lỗi trong quá trình truyền tải tệp.");
+                console.error("Upload error:", err);
+                alert("Mất kết nối với Backend.");
             } finally {
-                submitBtn.innerText = originalText;
-                submitBtn.disabled = false;
+                mainUploadBtn.innerText = originalText;
+                mainUploadBtn.disabled = false;
             }
         });
 
-        // Hàm gọi API định kỳ lấy dữ liệu cập nhật từ Database lên giao diện
+        // --- BƯỚC 2: CLICK CHUỘT LẤY TỌA ĐỘ ---
+        setupCanvas.addEventListener("mousedown", (e) => {
+            if (points.length >= 4) return;
+            
+            // Tính toán tỷ lệ (Scale) tương tự như cv2.setMouseCallback
+            const rect = setupCanvas.getBoundingClientRect();
+            const scaleX = setupCanvas.width / rect.width;
+            const scaleY = setupCanvas.height / rect.height;
+            
+            const realX = Math.round((e.clientX - rect.left) * scaleX);
+            const realY = Math.round((e.clientY - rect.top) * scaleY);
+            
+            points.push([realX, realY]);
+            
+            // Vẽ điểm đỏ
+            ctx.beginPath();
+            ctx.arc(realX, realY, 8, 0, 2 * Math.PI);
+            ctx.fillStyle = "#f87171";
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = "#ffffff";
+            ctx.stroke();
+
+            // Nối dây vàng giữa các điểm liên tiếp
+            if (points.length > 1) {
+                ctx.beginPath();
+                ctx.moveTo(points[points.length - 2][0], points[points.length - 2][1]);
+                ctx.lineTo(realX, realY);
+                ctx.strokeStyle = "#fbbf24";
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+
+            updateInstruction();
+        });
+
+        // --- BƯỚC 3: GỬI TỌA ĐỘ VÀ KHỞI CHẠY AI ---
+        startAiBtn.addEventListener("click", async () => {
+            const currentMode = modeSelect.value;
+            
+            // Gửi dữ liệu tọa độ lên FastAPI (Endpoint /set_config)
+            await fetch("/set_config", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ mode: currentMode, coords: points })
+            });
+
+            // Chuyển giao diện: Tắt Canvas, Bật luồng Video AI
+            setupCanvas.style.display = "none";
+            controlsOverlay.style.display = "none";
+            videoStream.style.display = "block";
+            isStreaming = true;
+            
+            // Yêu cầu load Stream
+            videoStream.src = `/video_feed?mode=${currentMode}&t=${new Date().getTime()}`;
+        });
+
+        // --- FETCH SỐ LIỆU STATS DB ---
         async function fetchSystemStats() {
             try {
                 const response = await fetch("/stats");
@@ -282,13 +430,11 @@
                     document.getElementById("p").innerText = data.plate;
                 }
             } catch (err) {
-                console.error("Lỗi lấy chỉ số thống kê:", err);
+                // Im lặng bắt lỗi nếu DB chưa sẵn sàng
             }
         }
-
-        // Thiết lập chu kỳ cập nhật dữ liệu 1 giây một lần
         setInterval(fetchSystemStats, 1000);
-        fetchSystemStats(); // Thực thi ngay lần đầu khi tải xong trang web
+        fetchSystemStats();
     </script>
 </body>
 </html>
