@@ -44,7 +44,7 @@ Clone repository này về máy tính cá nhân:
 ```bash
 git clone [https://github.com/tencuaban/traffic-monitoring-system.git](https://github.com/tencuaban/traffic-monitoring-system.git)
 cd traffic-monitoring-system
-
+```
 ### Bước 2: Tải trọng số Mô hình AI (YOLO Weights)
 Do giới hạn về dung lượng của GitHub, file trọng số mô hình (yolo11l.pt / yolo11s.pt) không được đính kèm trực tiếp trong mã nguồn.
 
