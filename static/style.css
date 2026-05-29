@@ -1,0 +1,23 @@
+body{
+
+    background:#111;
+    color:white;
+    font-family:Arial;
+}
+
+.container{
+
+    display:flex;
+    gap:30px;
+    padding:20px;
+}
+
+.video-box{
+
+    border:2px solid white;
+}
+
+.stats-box{
+
+    font-size:24px;
+}

@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Traffic Monitoring Dashboard</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f8fafc;
+            --accent-color: #38bdf8;
+            --success-color: #4ade80;
+            --danger-color: #f87171;
+            --warning-color: #fbbf24;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1500px;
+            margin: 0 auto;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 25px;
+            border-bottom: 2px solid var(--card-bg);
+            padding-bottom: 15px;
+        }
+        header h1 {
+            margin: 0;
+            color: var(--accent-color);
+            font-size: 2.2rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .dashboard-layout {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 25px;
+        }
+        .panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        }
+        .card h2 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-size: 1.15rem;
+            color: var(--accent-color);
+            border-left: 4px solid var(--accent-color);
+            padding-left: 10px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: 0.9rem;
+            color: #94a3b8;
+        }
+        input[type="file"], select {
+            width: 100%;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #475569;
+            background-color: #0f172a;
+            color: var(--text-color);
+            box-sizing: border-box;
+            outline: none;
+        }
+        input[type="file"]::file-selector-button {
+            background: var(--card-bg);
+            color: var(--text-color);
+            border: 1px solid #475569;
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--accent-color);
+            color: #0f172a;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 1rem;
+            margin-top: 5px;
+        }
+        button:hover {
+            background-color: #0284c7;
+            transform: translateY(-1px);
+        }
+        button:disabled {
+            background-color: #64748b;
+            cursor: not-allowed;
+        }
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #334155;
+        }
+        .stat-item:last-child {
+            border-bottom: none;
+        }
+        .stat-label {
+            font-size: 0.95rem;
+            color: #94a3b8;
+        }
+        .stat-value {
+            font-size: 1.3rem;
+            font-weight: bold;
+        }
+        .value-vehicles { color: var(--success-color); }
+        .value-speed { color: var(--accent-color); }
+        .value-reverse { color: var(--danger-color); }
+        .value-red { color: var(--warning-color); }
+        .value-plate { 
+            color: #e2e8f0; 
+            background: #0f172a; 
+            padding: 2px 10px; 
+            border-radius: 4px; 
+            border: 1px solid #475569; 
+            font-family: 'Courier New', Courier, monospace; 
+            font-size: 1.1rem;
+        }
+        .video-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid var(--card-bg);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+            min-height: 550px;
+        }
+        .video-container img {
+            width: 100%;
+            height: auto;
+            object-fit: contain;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Hệ Thống Giám Sát Giao Thông Thông Minh (AI Traffic Monitoring)</h1>
+        </header>
+
+        <div class="dashboard-layout">
+            <div class="panel">
+                <div class="card">
+                    <h2>Cấu Hình Hệ Thống</h2>
+                    <form id="uploadForm" enctype="multipart/form-data">
+                        <div class="form-group">
+                            <label for="videoFile">Chọn File Video</label>
+                            <input type="file" id="videoFile" accept="video/*" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="modeSelect">Chế Độ Phân Tích</label>
+                            <select id="modeSelect">
+                                <option value="count">Đếm xe & Phát hiện ngược chiều</option>
+                                <option value="speed">Đo tốc độ phương tiện</option>
+                            </select>
+                        </div>
+                        <button type="submit">Tải Lên & Khởi Chạy</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h2>Chỉ Số Thời Gian Thực</h2>
+                    <div class="stat-item">
+                        <span class="stat-label">Tổng số phương tiện:</span>
+                        <span class="stat-value value-vehicles" id="v">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Tốc độ trung bình:</span>
+                        <span class="stat-value value-speed" id="s">0 km/h</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Vi phạm ngược chiều:</span>
+                        <span class="stat-value value-reverse" id="re">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Vi phạm đèn đỏ:</span>
+                        <span class="stat-value value-red" id="r">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Biển số gần nhất:</span>
+                        <span class="stat-value value-plate" id="p">---</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="video-container">
+                <img id="videoStream" src="/video_feed?mode=count" alt="AI Video Stream">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById("uploadForm");
+        const modeSelect = document.getElementById("modeSelect");
+        const videoStream = document.getElementById("videoStream");
+
+        // Hàm cập nhật đường dẫn luồng stream theo mode đã chọn
+        function updateVideoStream() {
+            const currentMode = modeSelect.value;
+            // Thêm giá trị thời gian nhằm loại bỏ hiện tượng trình duyệt lưu cache ảnh stream cũ
+            videoStream.src = `/video_feed?mode=${currentMode}&t=${new Date().getTime()}`;
+        }
+
+        // Tự động chuyển mode xử lý trực tiếp khi người dùng thay đổi lựa chọn ở dropdown
+        modeSelect.addEventListener("change", () => {
+            updateVideoStream();
+        });
+
+        // Xử lý logic tải video lên server
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById("videoFile");
+            if (!fileInput.files[0]) return;
+
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+
+            const submitBtn = form.querySelector("button");
+            const originalText = submitBtn.innerText;
+            submitBtn.innerText = "Đang tải video lên...";
+            submitBtn.disabled = true;
+
+            try {
+                const response = await fetch("/upload", {
+                    method: "POST",
+                    body: formData
+                });
+                if (response.ok) {
+                    // Tải thành công thì làm mới luồng stream video ngay lập tức
+                    updateVideoStream();
+                } else {
+                    alert("Tải video lên thất bại.");
+                }
+            } catch (err) {
+                console.error("Lỗi kết nối:", err);
+                alert("Đã xảy ra lỗi trong quá trình truyền tải tệp.");
+            } finally {
+                submitBtn.innerText = originalText;
+                submitBtn.disabled = false;
+            }
+        });
+
+        // Hàm gọi API định kỳ lấy dữ liệu cập nhật từ Database lên giao diện
+        async function fetchSystemStats() {
+            try {
+                const response = await fetch("/stats");
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById("v").innerText = data.vehicles;
+                    document.getElementById("s").innerText = `${data.speed} km/h`;
+                    document.getElementById("r").innerText = data.red;
+                    document.getElementById("re").innerText = data.reverse;
+                    document.getElementById("p").innerText = data.plate;
+                }
+            } catch (err) {
+                console.error("Lỗi lấy chỉ số thống kê:", err);
+            }
+        }
+
+        // Thiết lập chu kỳ cập nhật dữ liệu 1 giây một lần
+        setInterval(fetchSystemStats, 1000);
+        fetchSystemStats(); // Thực thi ngay lần đầu khi tải xong trang web
+    </script>
+</body>
+</html>
