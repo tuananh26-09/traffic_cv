@@ -7,7 +7,6 @@ import mysql.connector
 import torch
 
 
-# 1. KHỞI TẠO MÔ HÌNH
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Đang sử dụng thiết bị: {device}")
 
@@ -15,7 +14,7 @@ try:
     model = YOLO("models/yolo11l.engine")
     print("Đã tải mô hình TensorRT")
 except:
-    model = YOLO("models/yolo11s.pt")
+    model = YOLO("models/yolo11l.pt")
     if device == "cuda":
         model.to("cuda")
     print("Đã tải mô hình PyTorch")
@@ -28,13 +27,6 @@ def get_db_connection():
         database="traffic_db"
     )
 
-# 2. CẤU HÌNH VÀ HÀM ĐẾM XE
-
-DIVIDER_START = sv.Point(460, 510)
-DIVIDER_END   = sv.Point(862, 1054)
-LINE_START = sv.Point(0, 689)
-LINE_END = sv.Point(1234, 679)
-
 LEFT_LANE_ALLOWED  = "DOWN"
 RIGHT_LANE_ALLOWED = "UP"
 MOVEMENT_THRESHOLD = 15
@@ -43,49 +35,6 @@ def is_left_of_line(point: sv.Point, line_start: sv.Point, line_end: sv.Point) -
     val = (line_end.x - line_start.x) * (point.y - line_start.y) - \
           (line_end.y - line_start.y) * (point.x - line_start.x)
     return val > 0
-
-def draw_stats_panel(frame, in_counts, out_counts):
-    overlay = frame.copy()
-    cv2.rectangle(overlay, (20, 20), (320, 220), (0, 0, 0), -1)
-    frame = cv2.addWeighted(overlay, 0.6, frame, 0.4, 0)
-    
-    cv2.putText(frame, "THONG KE (IN | OUT)", (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-    cv2.line(frame, (30, 60), (310, 60), (255, 255, 255), 1)
-    
-    vehicle_types = ["car", "motorcycle", "bus", "truck"]
-    y_pos = 90
-    total_in = 0
-    total_out = 0
-
-    for v_type in vehicle_types:
-        count_in = in_counts.get(v_type, 0)
-        count_out = out_counts.get(v_type, 0)
-        total_in += count_in
-        total_out += count_out
-        
-        text = f"{v_type.capitalize()}: {count_in} | {count_out}"
-        color = (255, 255, 255)
-        if v_type == "motorcycle": color = (0, 255, 255)
-        elif v_type == "truck": color = (0, 165, 255)
-        elif v_type == "bus": color = (255, 0, 255)
-        
-        cv2.putText(frame, text, (30, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 1)
-        y_pos += 30
-    
-    cv2.line(frame, (30, y_pos-10), (310, y_pos-10), (100, 100, 100), 1)
-    cv2.putText(frame, f"TOTAL: {total_in} | {total_out}", (30, y_pos+15), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-    return frame
-
-
-# 3. CẤU HÌNH VÀ CLASS CHO ĐO TỐC ĐỘ
-
-SOURCE = np.array([[481, 60], [773, 56], [1210, 409], [17, 402]])
-TARGET_WIDTH = 10
-TARGET_HEIGHT = 50
-TARGET = np.array([
-    [0, 0], [TARGET_WIDTH - 1, 0],
-    [TARGET_WIDTH - 1, TARGET_HEIGHT - 1], [0, TARGET_HEIGHT - 1],
-])
 
 class ViewTransformer:
     def __init__(self, source: np.ndarray, target: np.ndarray) -> None:
@@ -99,19 +48,15 @@ class ViewTransformer:
         transformed_points = cv2.perspectiveTransform(reshaped_points, self.m)
         return transformed_points.reshape(-1, 2)
 
-
-# 4. HÀM STREAM GENERATOR CHÍNH
-
-def generate_frames(video_path, mode="count", coords=None):
+def generate_frames(video_path, mode="count", coords=None, distance=20.0):
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
-    byte_track = sv.ByteTrack(frame_rate=int(fps))
     
+    byte_track = sv.ByteTrack(frame_rate=int(fps))
     box_annotator = sv.BoxAnnotator(thickness=2)
     label_annotator = sv.LabelAnnotator(text_scale=0.6, text_thickness=1)
     
     if mode == "count":
-        # Mặc định
         div_start, div_end = sv.Point(460, 510), sv.Point(862, 1054)
         line_start, line_end = sv.Point(0, 689), sv.Point(1234, 679)
         
@@ -123,7 +68,6 @@ def generate_frames(video_path, mode="count", coords=None):
             
         line_zone = sv.LineZone(start=line_start, end=line_end)
         line_annotator = sv.LineZoneAnnotator(thickness=2, text_thickness=1, text_scale=0.5)
-        
         DIVIDER_START, DIVIDER_END = div_start, div_end
         
         track_history = defaultdict(lambda: deque(maxlen=30))
@@ -133,12 +77,13 @@ def generate_frames(video_path, mode="count", coords=None):
         
     elif mode == "speed":
         SOURCE = np.array([[481, 60], [773, 56], [1210, 409], [17, 402]])
-        
         if coords and len(coords) == 4:
             SOURCE = np.array(coords, dtype=np.int32)
             
         TARGET_WIDTH = 10
-        TARGET_HEIGHT = int(distance) if distance > 0 else 20
+        # Gán chiều dài từ Web xuống, chống lỗi chia 0
+        TARGET_HEIGHT = int(distance) if distance > 0 else 20 
+        
         TARGET = np.array([
             [0, 0], [TARGET_WIDTH - 1, 0],
             [TARGET_WIDTH - 1, TARGET_HEIGHT - 1], [0, TARGET_HEIGHT - 1],
@@ -165,13 +110,11 @@ def generate_frames(video_path, mode="count", coords=None):
             break
             
         annotated_frame = frame.copy()
-
         result = model(frame, verbose=False)[0]
         detections = sv.Detections.from_ultralytics(result)
         detections = detections[np.isin(detections.class_id, [2, 3, 5, 7])]
         detections = detections[detections.confidence > 0.25]
 
-       
         if mode == "count":
             detections = byte_track.update_with_detections(detections=detections)
             
@@ -198,7 +141,6 @@ def generate_frames(video_path, mode="count", coords=None):
                             elif RIGHT_LANE_ALLOWED == "DOWN" and is_moving_up: wrong_way_ids.add(tracker_id)
 
             valid_mask = [tid not in wrong_way_ids for tid in detections.tracker_id]
-            
             if any(valid_mask):
                 detections_valid = detections[np.array(valid_mask, dtype=bool)]
                 cross_in, cross_out = line_zone.trigger(detections_valid)
@@ -208,9 +150,22 @@ def generate_frames(video_path, mode="count", coords=None):
                     if is_in: in_counts[class_name] += 1
                     if is_out: out_counts[class_name] += 1
 
+            # Ghi Database cho chế độ đếm (Lưu tốc độ = 0)
+            if db and cursor and hasattr(detections, 'tracker_id') and detections.tracker_id is not None:
+                for track_id in detections.tracker_id:
+                    if track_id not in saved_ids:
+                        saved_ids.add(track_id)
+                        vehicle_number += 1
+                        try:
+                            cursor.execute(
+                                "INSERT INTO vehicles (vehicle_id, speed, vehicle_number) VALUES (%s,%s,%s)",
+                                (int(track_id), 0.0, vehicle_number)
+                            )
+                            db.commit()
+                        except Exception: pass
+
             cv2.line(annotated_frame, (DIVIDER_START.x, DIVIDER_START.y), (DIVIDER_END.x, DIVIDER_END.y), (0, 255, 255), 3)
             line_annotator.annotate(annotated_frame, line_counter=line_zone)
-            
             wrong_mask = [tid in wrong_way_ids for tid in detections.tracker_id]
 
             if any(valid_mask):
@@ -228,12 +183,9 @@ def generate_frames(video_path, mode="count", coords=None):
                 annotated_frame = wrong_box_annotator.annotate(scene=annotated_frame, detections=det_wrong)
                 annotated_frame = wrong_lbl_annotator.annotate(scene=annotated_frame, detections=det_wrong,
                                                                labels=["NGUOC CHIEU"] * len(det_wrong))
-                cv2.putText(annotated_frame, "CANH BAO: VI PHAM !!!", (400, 100), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 3)
+                cv2.putText(annotated_frame, "CANH BAO: VI PHAM !!!", (400, 100), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 3)
 
-            annotated_frame = draw_stats_panel(annotated_frame, in_counts, out_counts)
 
-        
         elif mode == "speed":
             detections = detections[polygon_zone.trigger(detections)]
             detections = byte_track.update_with_detections(detections=detections)
@@ -253,63 +205,33 @@ def generate_frames(video_path, mode="count", coords=None):
                 else:
                     coordinate_start = coordinates[tracker_id][-1]
                     coordinate_end = coordinates[tracker_id][0]
-                    distance = abs(coordinate_start - coordinate_end)
+                    # Đã fix lỗi trùng tên biến "distance"
+                    moved_dist = abs(coordinate_start - coordinate_end) 
                     time_elapsed = len(coordinates[tracker_id]) / fps
                     
-                    speed = distance / time_elapsed * 3.6
-                    labels.append(f"#{tracker_id} {class_name} {int(speed)} km/h")
+                    real_speed = moved_dist / time_elapsed * 3.6
+                    labels.append(f"#{tracker_id} {class_name} {int(real_speed)} km/h")
+
+                    # Ghi Database cho chế độ tốc độ
                     if db and cursor and tracker_id not in saved_ids:
                         saved_ids.add(tracker_id)
                         vehicle_number += 1
                         try:
                             cursor.execute(
-                                """
-                                INSERT INTO vehicles
-                                (vehicle_id, speed, vehicle_number)
-                                VALUES (%s,%s,%s)
-                                """,
-                                (int(tracker_id), float(speed), vehicle_number)
+                                "INSERT INTO vehicles (vehicle_id, speed, vehicle_number) VALUES (%s,%s,%s)",
+                                (int(tracker_id), float(real_speed), vehicle_number)
                             )
                             db.commit()
-                        except Exception as e:
-                            print(f"Lỗi khi insert DB: {e}")
+                        except Exception: pass
 
             cv2.polylines(annotated_frame, [SOURCE.astype(np.int32)], True, (0, 0, 255), 2)
             annotated_frame = trace_annotator.annotate(scene=annotated_frame, detections=detections)
             annotated_frame = box_annotator.annotate(scene=annotated_frame, detections=detections)
-            annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=detections, labels=labels)
+            annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=labels)
 
-        if db and cursor and hasattr(detections, 'tracker_id') and detections.tracker_id is not None:
-            for track_id in detections.tracker_id:
-                if track_id not in saved_ids:
-                    saved_ids.add(track_id)
-                    vehicle_number += 1
-                    
-                    speed_db = 60 
-                    
-                    try:
-                        cursor.execute(
-                            """
-                            INSERT INTO vehicles
-                            (vehicle_id, speed, vehicle_number)
-                            VALUES (%s,%s,%s)
-                            """,
-                            (int(track_id), speed_db, vehicle_number)
-                        )
-                        db.commit()
-                    except Exception as e:
-                        print(f"Lỗi khi insert DB: {e}")
 
-        
         _, buffer = cv2.imencode(".jpg", annotated_frame)
-        frame_bytes = buffer.tobytes()
-        
-        yield (
-            b"--frame\r\n"
-            b"Content-Type: image/jpeg\r\n\r\n"
-            + frame_bytes +
-            b"\r\n"
-        )
+        yield (b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n")
         
     cap.release()
     if db and cursor:
