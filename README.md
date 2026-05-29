@@ -41,18 +41,16 @@ Clone repository này về máy tính cá nhân:
 ```bash
 git clone [https://github.com/tuananh26-09/traffic_cv.git]
 ```
-### Bước 2: Tải trọng số Mô hình AI (YOLO Weights)
-Do giới hạn về dung lượng của GitHub, file trọng số mô hình (yolo11l.pt / yolo11s.pt) không được đính kèm trực tiếp trong mã nguồn.
 
-Truy cập liên kết sau để tải file weights: [Chèn Link Google Drive của bạn vào đây]
-
-Đặt file vừa tải vào thư mục models/ ở trong thư mục gốc của dự án.
-
-### Bước 3: Khởi chạy hệ thống bằng Docker
+### Bước 2: Khởi chạy hệ thống bằng Docker
 Mở Terminal/Command Prompt tại thư mục dự án và chạy lệnh sau:
-
+- Chạy trực tiếp docker:
 ```bash
 docker-compose up --build -d
+```
+- Chạy trên ubuntu:
+```bash
+sudo docker-compose up --build -d
 ```
 Lưu ý: Lần đầu khởi chạy sẽ mất khoảng 5-10 phút để Docker tải Ubuntu, các thư viện PyTorch và thiết lập MySQL.
 
