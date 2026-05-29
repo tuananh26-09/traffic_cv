@@ -152,7 +152,7 @@
             border: 2px solid var(--card-bg);
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
             min-height: 550px;
-            position: relative; /* Cần thiết để chứa Canvas và Overlay */
+            position: relative; 
         }
         .video-container img {
             width: 100%;
@@ -160,7 +160,7 @@
             object-fit: contain;
             display: block;
         }
-        /* Style bổ sung cho lớp phủ điều khiển Canvas */
+       
         #controlsOverlay {
             position: absolute;
             bottom: 20px;
@@ -257,7 +257,6 @@
         const videoStream = document.getElementById("videoStream");
         const mainUploadBtn = document.getElementById("mainUploadBtn");
 
-        // Các thành phần UI mới cho việc setup tọa độ
         const setupCanvas = document.getElementById("setupCanvas");
         const controlsOverlay = document.getElementById("controlsOverlay");
         const instructionText = document.getElementById("instructionText");
@@ -269,21 +268,17 @@
         let origWidth = 0;
         let origHeight = 0;
         let bgImage = new Image();
-        let isStreaming = false; // Phân biệt hệ thống đang ở màn hình cài đặt hay đang chạy AI
+        let isStreaming = false; 
 
-        // --- XỬ LÝ SỰ KIỆN CHUYỂN ĐỔI CHẾ ĐỘ ---
         modeSelect.addEventListener("change", () => {
             if (isStreaming) {
-                // Nếu đang stream, đổi luồng AI lập tức
                 videoStream.src = `/video_feed?mode=${modeSelect.value}&t=${new Date().getTime()}`;
             } else {
-                // Nếu đang ở bước Setup, reset lại các điểm vẽ
                 clearCanvas();
                 updateInstruction();
             }
         });
 
-        // --- HÀM XÓA & RESET CANVAS ---
         function clearCanvas() {
             points = [];
             if (origWidth > 0 && origHeight > 0) {
@@ -294,7 +289,6 @@
         }
         clearBtn.addEventListener("click", clearCanvas);
 
-        // --- HÀM CẬP NHẬT TEXT HƯỚNG DẪN ---
         function updateInstruction() {
             const mode = modeSelect.value;
             if (mode === "count") {
@@ -303,7 +297,6 @@
                 instructionText.innerText = `Đo Tốc Độ: Chọn ${points.length}/4 điểm (Vẽ vùng Polygon góc quay)`;
             }
             
-            // Kích hoạt nút chạy khi đủ 4 điểm
             startAiBtn.disabled = points.length < 4;
             if (points.length === 4) {
                 instructionText.innerText = "Tuyệt vời! Đã lấy đủ tọa độ. Hãy bấm Chạy AI.";
@@ -313,7 +306,6 @@
             }
         }
 
-        // --- BƯỚC 1: UPLOAD & TRÍCH XUẤT KHUNG HÌNH ĐẦU TIÊN ---
         form.addEventListener("submit", async (e) => {
             e.preventDefault();
             const fileInput = document.getElementById("videoFile");
@@ -331,19 +323,16 @@
                 if (response.ok) {
                     const data = await response.json();
                     
-                    // Setup kích thước chuẩn của Canvas theo Video
                     origWidth = data.width;
                     origHeight = data.height;
                     setupCanvas.width = origWidth;
                     setupCanvas.height = origHeight;
                     
-                    // Ẩn Video Stream, Hiện Canvas Cài đặt
                     isStreaming = false;
                     videoStream.style.display = "none";
                     setupCanvas.style.display = "block";
                     controlsOverlay.style.display = "block";
                     
-                    // Vẽ ảnh Frame đầu lên Canvas
                     bgImage.src = data.frame_url + "?t=" + new Date().getTime();
                     bgImage.onload = () => {
                         clearCanvas();
@@ -360,11 +349,9 @@
             }
         });
 
-        // --- BƯỚC 2: CLICK CHUỘT LẤY TỌA ĐỘ ---
         setupCanvas.addEventListener("mousedown", (e) => {
             if (points.length >= 4) return;
             
-            // Tính toán tỷ lệ (Scale) tương tự như cv2.setMouseCallback
             const rect = setupCanvas.getBoundingClientRect();
             const scaleX = setupCanvas.width / rect.width;
             const scaleY = setupCanvas.height / rect.height;
@@ -374,7 +361,6 @@
             
             points.push([realX, realY]);
             
-            // Vẽ điểm đỏ
             ctx.beginPath();
             ctx.arc(realX, realY, 8, 0, 2 * Math.PI);
             ctx.fillStyle = "#f87171";
@@ -383,7 +369,6 @@
             ctx.strokeStyle = "#ffffff";
             ctx.stroke();
 
-            // Nối dây vàng giữa các điểm liên tiếp
             if (points.length > 1) {
                 ctx.beginPath();
                 ctx.moveTo(points[points.length - 2][0], points[points.length - 2][1]);
@@ -396,28 +381,23 @@
             updateInstruction();
         });
 
-        // --- BƯỚC 3: GỬI TỌA ĐỘ VÀ KHỞI CHẠY AI ---
         startAiBtn.addEventListener("click", async () => {
             const currentMode = modeSelect.value;
             
-            // Gửi dữ liệu tọa độ lên FastAPI (Endpoint /set_config)
             await fetch("/set_config", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ mode: currentMode, coords: points })
             });
 
-            // Chuyển giao diện: Tắt Canvas, Bật luồng Video AI
             setupCanvas.style.display = "none";
             controlsOverlay.style.display = "none";
             videoStream.style.display = "block";
             isStreaming = true;
             
-            // Yêu cầu load Stream
             videoStream.src = `/video_feed?mode=${currentMode}&t=${new Date().getTime()}`;
         });
 
-        // --- FETCH SỐ LIỆU STATS DB ---
         async function fetchSystemStats() {
             try {
                 const response = await fetch("/stats");
@@ -429,9 +409,7 @@
                     document.getElementById("re").innerText = data.reverse;
                     document.getElementById("p").innerText = data.plate;
                 }
-            } catch (err) {
-                // Im lặng bắt lỗi nếu DB chưa sẵn sàng
-            }
+            } catch (err) {}
         }
         setInterval(fetchSystemStats, 1000);
         fetchSystemStats();
