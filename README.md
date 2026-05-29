@@ -1,1 +1,46 @@
 # traffic_cv
+# 🚦 Hệ Thống Giám Sát Và Phân Tích Giao Thông Thông Minh (AI Traffic Monitoring System)
+
+Dự án phát triển hệ thống camera giám sát giao thông thông minh ứng dụng Trí tuệ nhân tạo (Computer Vision). Hệ thống có khả năng nhận diện, theo dõi, đếm lưu lượng, phát hiện hành vi đi ngược chiều và ước lượng tốc độ phương tiện theo thời gian thực thông qua Dashboard Web trực quan.
+
+**Tác giả:** Nguyễn Tuấn Anh  
+**Đồ án:** Khoá luận tốt nghiệp chuyên ngành Trí tuệ nhân tạo  
+
+---
+
+## ✨ Tính Năng Nổi Bật
+
+- 🚗 **Phân loại phương tiện:** Nhận diện các loại xe phổ biến (Ô tô, Xe máy, Xe buýt, Xe tải).
+- 📊 **Đếm lưu lượng (Vehicle Counting):** Thống kê số lượng phương tiện đi vào (IN) và đi ra (OUT) khỏi khu vực quan sát.
+- ⚠️ **Phát hiện vi phạm (Wrong-way Detection):** Cảnh báo trực tiếp trên màn hình các phương tiện đi sai làn hoặc đi ngược chiều.
+- ⚡ **Đo tốc độ (Speed Estimation):** Ứng dụng phép biến đổi phối cảnh (Perspective Transform) để tính toán vận tốc di chuyển (km/h) của từng phương tiện.
+- 🌐 **Web Dashboard:** Giao diện điều khiển thân thiện, cho phép tải lên video và chuyển đổi chế độ phân tích theo thời gian thực.
+- 🗄️ **Lưu trữ CSDL:** Tự động lưu trữ thông tin phương tiện và tốc độ vào cơ sở dữ liệu MySQL.
+
+---
+
+## 🛠️ Công Nghệ Sử Dụng
+
+- **AI/Deep Learning:** `Ultralytics YOLO11` (Object Detection), `Supervision`, `ByteTrack` (Object Tracking).
+- **Computer Vision:** `OpenCV`, `Numpy`.
+- **Backend & Web:** `FastAPI`, `Uvicorn`, `HTML/CSS/JS`.
+- **Database:** `MySQL 8.0`.
+- **Deployment:** `Docker`, `Docker Compose`.
+
+---
+
+## ⚙️ Yêu Cầu Hệ Thống
+
+Để chạy được dự án này, máy tính của bạn cần cài đặt sẵn:
+1. [Docker Desktop](https://www.docker.com/products/docker-desktop/) hoặc Docker Engine.
+2. Nguồn tài nguyên khuyến nghị: RAM tối thiểu 8GB (Ưu tiên máy có GPU NVIDIA + cấu hình CUDA để đạt FPS tốt nhất).
+
+---
+
+## 🚀 Hướng Dẫn Cài Đặt Và Khởi Chạy
+
+### Bước 1: Tải mã nguồn
+Clone repository này về máy tính cá nhân:
+```bash
+git clone [https://github.com/tencuaban/traffic-monitoring-system.git](https://github.com/tencuaban/traffic-monitoring-system.git)
+cd traffic-monitoring-system
