@@ -11,7 +11,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Đang sử dụng thiết bị: {device}")
 
 try:
-    model = YOLO("models/yolo11l.engine")
+    model = YOLO("models/yolo11s.engine")
     print("Đã tải mô hình TensorRT")
 except:
     model = YOLO("models/yolo11l.pt")
@@ -227,7 +227,7 @@ def generate_frames(video_path, mode="count", coords=None, distance=20.0):
             cv2.polylines(annotated_frame, [SOURCE.astype(np.int32)], True, (0, 0, 255), 2)
             annotated_frame = trace_annotator.annotate(scene=annotated_frame, detections=detections)
             annotated_frame = box_annotator.annotate(scene=annotated_frame, detections=detections)
-            annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=labels)
+            annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=detections, labels=labels)
 
 
         _, buffer = cv2.imencode(".jpg", annotated_frame)
