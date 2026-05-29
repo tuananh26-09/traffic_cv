@@ -55,12 +55,14 @@ sudo docker-compose up --build -d
 Lưu ý: Lần đầu khởi chạy sẽ mất khoảng 5-10 phút để Docker tải Ubuntu, các thư viện PyTorch và thiết lập MySQL.
 
 - **Hướng dẫn sử dụng Dashboard:**
+
+Vì bài toán này cần phải setup tùy theo vị trí và độ cao của camera, nên việc demo dự án này sẽ chỉ dùng video đã được cài đặt cấu hình sẵn.
   
 Mở trình duyệt web và truy cập: http://localhost:8000
 
 Tại khu vực Cấu Hình Hệ Thống:
 
-Nhấn Chọn File Video để tải lên đoạn video giao thông cần phân tích.
+Nhấn Chọn File Video để tải lên đoạn video  ```speed.mp4```.
 
 Tại mục Chế Độ Phân Tích, chọn 1 trong 2 tính năng:
 
