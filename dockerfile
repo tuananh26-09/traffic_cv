@@ -1,4 +1,3 @@
-# File dockerfile của bạn nên trông như thế này
 FROM python:3.10-slim
 WORKDIR /src
 
