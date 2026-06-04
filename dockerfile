@@ -1,11 +1,14 @@
-FROM python:3.10-slim
+
+FROM python:3.11-slim
 WORKDIR /src
 
 RUN apt-get update && apt-get install -y libgl1 libglib2.0-0
 
 COPY requirement.txt .
 RUN pip install --upgrade pip
-RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
 RUN pip install --no-cache-dir -r requirement.txt
 
 COPY . .
