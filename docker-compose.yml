@@ -1,8 +1,8 @@
 services:
 
   api:
-
-    image: tuananh2026/traffic_dashboard_api:v1
+    build: .
+    image: tuananh260904/traffic_dashboard_api:v1
     container_name: dashboard_api
 
     ports:
@@ -38,6 +38,20 @@ services:
       - mysql_data:/var/lib/mysql
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
 
-volumes:
+  minio:
+    image: minio/minio:latest
+    container_name: traffic_minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
 
+
+volumes:
+  minio_data:
   mysql_data:
