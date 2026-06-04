@@ -72,7 +72,7 @@
             font-size: 0.9rem;
             color: #94a3b8;
         }
-        input[type="file"], select {
+        input[type="file"], select, input[type="number"] {
             width: 100%;
             padding: 10px;
             border-radius: 6px;
@@ -211,6 +211,7 @@
                         <input type="number" id="distanceInput" value="20" min="1" step="1" title="Ước lượng qua vạch kẻ đường hoặc chiều dài xe">
                         </div>
                         <button type="submit" id="mainUploadBtn">Tải Lên & Thiết Lập</button>
+                        <button type="button" id="stopAiBtn" style="background-color: #f43f5e; display: none; margin-top: 10px;">⏹ Dừng Phân Tích & Chọn Video Khác</button>
                     </form>
                 </div>
 
@@ -247,8 +248,9 @@
                 <div id="controlsOverlay">
                     <div class="overlay-box">
                         <span id="instructionText" style="color: #38bdf8; font-weight: bold; margin-right: 15px;">Hãy click chọn 4 điểm trên khung hình...</span>
-                        <button type="button" class="overlay-btn" id="clearBtn" style="background: #f87171;">Làm Lại</button>
+                        <button type="button" class="overlay-btn" id="clearBtn" style="background: #f87171; color: #fff;">Làm Lại</button>
                         <button type="button" class="overlay-btn" id="startAiBtn" style="background: #4ade80; color: #0f172a;" disabled>Chạy AI</button>
+                        <button onclick="saveCoordinatesToDB()" class="overlay-btn" style="background: #fbbf24; color: #0f172a;">Lưu tọa độ DB</button>
                     </div>
                 </div>
             </div>
@@ -260,7 +262,6 @@
         const modeSelect = document.getElementById("modeSelect");
         const videoStream = document.getElementById("videoStream");
         const mainUploadBtn = document.getElementById("mainUploadBtn");
-
 
         const setupCanvas = document.getElementById("setupCanvas");
         const controlsOverlay = document.getElementById("controlsOverlay");
@@ -275,20 +276,26 @@
         let bgImage = new Image();
         let isStreaming = false; 
 
-  
+        function getCurrentVideoName() {
+            const fileInput = document.getElementById("videoFile");
+            if (fileInput.files && fileInput.files.length > 0) {
+                return fileInput.files[0].name;
+            }
+            return "";
+        }
+
         modeSelect.addEventListener("change", () => {
             const distanceGroup = document.getElementById("distanceGroup");
             distanceGroup.style.display = (modeSelect.value === "speed") ? "block" : "none";
 
             if (isStreaming) {
-                videoStream.src = `/video_feed?mode=${modeSelect.value}&t=${new Date().getTime()}`;
+                const videoName = getCurrentVideoName();
+                videoStream.src = `/video_feed?video_name=${videoName}&mode=${modeSelect.value}&t=${new Date().getTime()}`;
             } else {
                 clearCanvas();
                 updateInstruction();
             }
         });
-
-
 
         function clearCanvas() {
             points = [];
@@ -347,6 +354,28 @@
                     bgImage.src = data.frame_url + "?t=" + new Date().getTime();
                     bgImage.onload = () => {
                         clearCanvas();
+                        if (data.saved_coords && data.saved_coords.length === 4) {
+                            points = data.saved_coords; 
+                            points.forEach((pt, index) => {
+                                ctx.beginPath();
+                                ctx.arc(pt[0], pt[1], 8, 0, 2 * Math.PI);
+                                ctx.fillStyle = "#f87171";
+                                ctx.fill();
+                                ctx.lineWidth = 2;
+                                ctx.strokeStyle = "#ffffff";
+                                ctx.stroke();
+
+                                if (index > 0) {
+                                    ctx.beginPath();
+                                    ctx.moveTo(points[index - 1][0], points[index - 1][1]);
+                                    ctx.lineTo(pt[0], pt[1]);
+                                    ctx.strokeStyle = "#fbbf24";
+                                    ctx.lineWidth = 3;
+                                    ctx.stroke();
+                                }
+                            });
+                            updateInstruction(); 
+                        }
                     };
                 } else {
                     alert("Lỗi khi tải video lên server.");
@@ -359,7 +388,6 @@
                 mainUploadBtn.disabled = false;
             }
         });
-
 
         setupCanvas.addEventListener("mousedown", (e) => {
             if (points.length >= 4) return;
@@ -393,9 +421,14 @@
             updateInstruction();
         });
 
+        let statsInterval = null;
+
+        const stopAiBtn = document.getElementById("stopAiBtn");
+
         startAiBtn.addEventListener("click", async () => {
             const currentMode = modeSelect.value;
             const currentDistance = document.getElementById("distanceInput").value;
+            const videoName = getCurrentVideoName(); 
 
             await fetch("/set_config", {
                 method: "POST",
@@ -407,9 +440,44 @@
             controlsOverlay.style.display = "none";
             videoStream.style.display = "block";
             isStreaming = true;
+
+            mainUploadBtn.style.display = "none";
+            stopAiBtn.style.display = "block";
             
-            videoStream.src = `/video_feed?mode=${currentMode}&t=${new Date().getTime()}`;
+            videoStream.src = `/video_feed?video_name=${videoName}&mode=${currentMode}&t=${new Date().getTime()}`;
+            if (statsInterval) clearInterval(statsInterval);
+            statsInterval = setInterval(fetchSystemStats, 1000);
         });
+
+        stopAiBtn.addEventListener("click", () => {
+            clearInterval(statsInterval);
+            isStreaming = false;
+
+            videoStream.src = "";
+            videoStream.style.display = "none";
+            setupCanvas.style.display = "block";
+            controlsOverlay.style.display = "block";
+
+            stopAiBtn.style.display = "none";
+            mainUploadBtn.style.display = "block";
+            
+            alert("Đã ngắt luồng phân tích. Bạn có thể chọn video khác!");
+        });
+
+        videoStream.onerror = () => {
+            if (isStreaming) {
+                console.log("Video đã kết thúc, ngắt kết nối stream.");
+            
+                clearInterval(statsInterval); 
+                isStreaming = false;
+
+                videoStream.style.display = "none";
+                setupCanvas.style.display = "block";
+                controlsOverlay.style.display = "block";
+                
+                alert("Đã phân tích xong toàn bộ video!");
+            }
+        };
 
         async function fetchSystemStats() {
             try {
@@ -423,9 +491,47 @@
                     document.getElementById("p").innerText = data.plate;
                 }
             } catch (err) {
+                console.error("Lỗi khi lấy chỉ số hệ thống:", err);
             }
         }
-        setInterval(fetchSystemStats, 1000);
+
+        async function saveCoordinatesToDB() {
+            if (points.length !== 4) {
+                alert("Vui lòng click đủ 4 điểm trên video trước khi lưu!");
+                return;
+            }
+            
+            const videoName = getCurrentVideoName();
+            if (!videoName) {
+                alert("Bạn chưa tải lên video nào!");
+                return;
+            }
+
+            try {
+                const response = await fetch('/save_config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        video_name: videoName,
+                        coordinates: points 
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.status === "success") {
+                    alert("Tuyệt vời! " + data.message);
+                } else {
+                    alert("Lỗi: " + data.message);
+                }
+            } catch (error) {
+                console.error("Lỗi khi gọi API:", error);
+                alert("Không thể kết nối đến máy chủ!");
+            }
+        }
+        
         fetchSystemStats();
     </script>
 </body>
