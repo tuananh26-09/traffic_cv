@@ -1,0 +1,57 @@
+services:
+
+  api:
+    build: .
+    image: tuananh260904/traffic_dashboard_api:v1
+    container_name: dashboard_api
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - /mnt/d/project_test/test_cv:/src
+
+    depends_on:
+      - mysql
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+  mysql:
+
+    image: mysql:8
+
+    container_name: cv_db
+
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: traffic_db
+
+    ports:
+      - "3306:3306"
+
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  minio:
+    image: minio/minio:latest
+    container_name: traffic_minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
+
+volumes:
+  minio_data:
+  mysql_data:
