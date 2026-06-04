@@ -9,5 +9,5 @@ ultralytics
 supervision
 mysql-connector-python
 python-multipart
-
+minio
 
