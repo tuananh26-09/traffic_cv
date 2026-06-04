@@ -72,3 +72,8 @@ Lưu ý: Lần đầu khởi chạy sẽ mất khoảng 5-10 phút để Docker 
 - Tại mục **Buckets**, bạn sẽ thấy hệ thống tự động quản lý 2 kho chứa:
   - `traffic-videos`: Chứa các video gốc người dùng tải lên.
   - `traffic-results`: Chứa video kết quả (đã được AI phân tích và vẽ box) để tải về làm bằng chứng vi phạm.
+ 
+<img width="1919" height="917" alt="image" src="https://github.com/user-attachments/assets/6d4a2192-5cf0-485b-b752-0be5022280d1" />
+<img width="1919" height="910" alt="image" src="https://github.com/user-attachments/assets/0f40ce72-b440-4e7a-af83-4792f61c5872" />
+
+
