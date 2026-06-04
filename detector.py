@@ -5,7 +5,8 @@ from ultralytics import YOLO
 import supervision as sv
 import mysql.connector
 import torch
-
+import os
+from minio import Minio
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Đang sử dụng thiết bị: {device}")
@@ -18,6 +19,14 @@ except:
     if device == "cuda":
         model.to("cuda")
     print("Đã tải mô hình PyTorch")
+
+# Khởi tạo MinIO bên detector
+minio_client = Minio(
+    "minio:9000", 
+    access_key="admin", 
+    secret_key="password123", 
+    secure=False
+)
 
 def get_db_connection():
     return mysql.connector.connect(
@@ -48,9 +57,18 @@ class ViewTransformer:
         transformed_points = cv2.perspectiveTransform(reshaped_points, self.m)
         return transformed_points.reshape(-1, 2)
 
-def generate_frames(video_path, mode="count", coords=None, distance=20.0):
-    cap = cv2.VideoCapture(video_path)
+def generate_frames(video_name, mode="count", coords=None, distance=20.0):
+    video_url = minio_client.get_presigned_url("GET", "traffic-videos", video_name)
+    cap = cv2.VideoCapture(video_url)
+    
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+    result_filename = f"result_{video_name}"
+    temp_filepath = f"/tmp/{result_filename}"
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(temp_filepath, fourcc, int(fps), (width, height))
     
     byte_track = sv.ByteTrack(frame_rate=int(fps))
     box_annotator = sv.BoxAnnotator(thickness=2)
@@ -91,6 +109,7 @@ def generate_frames(video_path, mode="count", coords=None, distance=20.0):
         polygon_zone = sv.PolygonZone(polygon=SOURCE)
         view_transformer = ViewTransformer(source=SOURCE, target=TARGET)
         coordinates = defaultdict(lambda: deque(maxlen=int(fps)))
+        all_speeds = defaultdict(list)
         trace_annotator = sv.TraceAnnotator(thickness=2, trace_length=int(fps * 2))
 
     try:
@@ -103,135 +122,167 @@ def generate_frames(video_path, mode="count", coords=None, distance=20.0):
     saved_ids = set()
     vehicle_number = 0
 
-    while True:
-        success, frame = cap.read()
-        if not success:
-            break
-            
-        annotated_frame = frame.copy()
-        result = model(frame, verbose=False)[0]
-        detections = sv.Detections.from_ultralytics(result)
-        detections = detections[np.isin(detections.class_id, [2, 3, 5, 7])]
-        detections = detections[detections.confidence > 0.25]
-
-        if mode == "count":
-            detections = byte_track.update_with_detections(detections=detections)
-            
-            for i, tracker_id in enumerate(detections.tracker_id):
-                box = detections.xyxy[i]
-                x_center = int((box[0] + box[2]) / 2)
-                y_center = int((box[1] + box[3]) / 2)
-                center_point = sv.Point(x_center, y_center)
+    try:
+        while True:
+            success, frame = cap.read()
+            if not success:
+                break
                 
-                track_history[tracker_id].append(y_center)
+            annotated_frame = frame.copy()
+            result = model(frame, verbose=False)[0]
+            detections = sv.Detections.from_ultralytics(result)
+            detections = detections[np.isin(detections.class_id, [2, 3, 5, 7])]
+            detections = detections[detections.confidence > 0.25]
 
-                if len(track_history[tracker_id]) > 10:
-                    delta_y = track_history[tracker_id][-1] - track_history[tracker_id][0]
-                    if abs(delta_y) > MOVEMENT_THRESHOLD:
-                        is_moving_down = delta_y > 0
-                        is_moving_up = delta_y < 0
-                        is_left_side = is_left_of_line(center_point, DIVIDER_START, DIVIDER_END)
-
-                        if is_left_side: 
-                            if LEFT_LANE_ALLOWED == "UP" and is_moving_down: wrong_way_ids.add(tracker_id)
-                            elif LEFT_LANE_ALLOWED == "DOWN" and is_moving_up: wrong_way_ids.add(tracker_id)
-                        else: 
-                            if RIGHT_LANE_ALLOWED == "UP" and is_moving_down: wrong_way_ids.add(tracker_id)
-                            elif RIGHT_LANE_ALLOWED == "DOWN" and is_moving_up: wrong_way_ids.add(tracker_id)
-
-            valid_mask = [tid not in wrong_way_ids for tid in detections.tracker_id]
-            if any(valid_mask):
-                detections_valid = detections[np.array(valid_mask, dtype=bool)]
-                cross_in, cross_out = line_zone.trigger(detections_valid)
+            if mode == "count":
+                detections = byte_track.update_with_detections(detections=detections)
                 
-                for is_in, is_out, class_id in zip(cross_in, cross_out, detections_valid.class_id):
-                    class_name = model.names[class_id]
-                    if is_in: in_counts[class_name] += 1
-                    if is_out: out_counts[class_name] += 1
-
-            if db and cursor and hasattr(detections, 'tracker_id') and detections.tracker_id is not None:
-                for track_id in detections.tracker_id:
-                    if track_id not in saved_ids:
-                        saved_ids.add(track_id)
-                        vehicle_number += 1
-                        try:
-                            cursor.execute(
-                                "INSERT INTO vehicles (vehicle_id, speed, vehicle_number) VALUES (%s,%s,%s)",
-                                (int(track_id), 0.0, vehicle_number)
-                            )
-                            db.commit()
-                        except Exception: pass
-
-            cv2.line(annotated_frame, (DIVIDER_START.x, DIVIDER_START.y), (DIVIDER_END.x, DIVIDER_END.y), (0, 255, 255), 3)
-            line_annotator.annotate(annotated_frame, line_counter=line_zone)
-            wrong_mask = [tid in wrong_way_ids for tid in detections.tracker_id]
-
-            if any(valid_mask):
-                det_normal = detections[np.array(valid_mask, dtype=bool)]
-                box_annotator.color = sv.Color.GREEN
-                annotated_frame = box_annotator.annotate(scene=annotated_frame, detections=det_normal)
-                annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=det_normal,
-                                                           labels=[f"#{tid}" for tid in det_normal.tracker_id])
-
-            if any(wrong_mask):
-                det_wrong = detections[np.array(wrong_mask, dtype=bool)]
-                wrong_box_annotator = sv.BoxAnnotator(thickness=4, color=sv.Color.RED)
-                wrong_lbl_annotator = sv.LabelAnnotator(text_scale=0.8, color=sv.Color.RED, text_color=sv.Color.WHITE)
-                
-                annotated_frame = wrong_box_annotator.annotate(scene=annotated_frame, detections=det_wrong)
-                annotated_frame = wrong_lbl_annotator.annotate(scene=annotated_frame, detections=det_wrong,
-                                                               labels=["NGUOC CHIEU"] * len(det_wrong))
-                cv2.putText(annotated_frame, "CANH BAO: VI PHAM !!!", (400, 100), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 3)
-
-
-        elif mode == "speed":
-            detections = detections[polygon_zone.trigger(detections)]
-            detections = byte_track.update_with_detections(detections=detections)
-            
-            points = detections.get_anchors_coordinates(anchor=sv.Position.BOTTOM_CENTER)
-            points = view_transformer.transform_points(points=points).astype(int)
-
-            for tracker_id, [_, y] in zip(detections.tracker_id, points):
-                coordinates[tracker_id].append(y)
-
-            labels = []
-            for tracker_id, class_id in zip(detections.tracker_id, detections.class_id):
-                class_name = model.names[class_id]
-                
-                if len(coordinates[tracker_id]) < fps / 2:
-                    labels.append(f"#{tracker_id} {class_name}")
-                else:
-                    coordinate_start = coordinates[tracker_id][-1]
-                    coordinate_end = coordinates[tracker_id][0]
-                   
-                    moved_dist = abs(coordinate_start - coordinate_end) 
-                    time_elapsed = len(coordinates[tracker_id]) / fps
+                for i, tracker_id in enumerate(detections.tracker_id):
+                    box = detections.xyxy[i]
+                    x_center = int((box[0] + box[2]) / 2)
+                    y_center = int((box[1] + box[3]) / 2)
+                    center_point = sv.Point(x_center, y_center)
                     
-                    real_speed = moved_dist / time_elapsed * 3.6
-                    labels.append(f"#{tracker_id} {class_name} {int(real_speed)} km/h")
+                    track_history[tracker_id].append(y_center)
 
-                    # Ghi Database cho chế độ tốc độ
-                    if db and cursor and tracker_id not in saved_ids:
-                        saved_ids.add(tracker_id)
-                        vehicle_number += 1
-                        try:
-                            cursor.execute(
-                                "INSERT INTO vehicles (vehicle_id, speed, vehicle_number) VALUES (%s,%s,%s)",
-                                (int(tracker_id), float(real_speed), vehicle_number)
-                            )
-                            db.commit()
-                        except Exception: pass
+                    if len(track_history[tracker_id]) > 10:
+                        delta_y = track_history[tracker_id][-1] - track_history[tracker_id][0]
+                        if abs(delta_y) > MOVEMENT_THRESHOLD:
+                            is_moving_down = delta_y > 0
+                            is_moving_up = delta_y < 0
+                            is_left_side = is_left_of_line(center_point, DIVIDER_START, DIVIDER_END)
 
-            cv2.polylines(annotated_frame, [SOURCE.astype(np.int32)], True, (0, 0, 255), 2)
-            annotated_frame = trace_annotator.annotate(scene=annotated_frame, detections=detections)
-            annotated_frame = box_annotator.annotate(scene=annotated_frame, detections=detections)
-            annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=detections, labels=labels)
+                            if is_left_side: 
+                                if LEFT_LANE_ALLOWED == "UP" and is_moving_down: wrong_way_ids.add(tracker_id)
+                                elif LEFT_LANE_ALLOWED == "DOWN" and is_moving_up: wrong_way_ids.add(tracker_id)
+                            else: 
+                                if RIGHT_LANE_ALLOWED == "UP" and is_moving_down: wrong_way_ids.add(tracker_id)
+                                elif RIGHT_LANE_ALLOWED == "DOWN" and is_moving_up: wrong_way_ids.add(tracker_id)
 
+                valid_mask = [tid not in wrong_way_ids for tid in detections.tracker_id]
+                if any(valid_mask):
+                    detections_valid = detections[np.array(valid_mask, dtype=bool)]
+                    cross_in, cross_out = line_zone.trigger(detections_valid)
+                    
+                    for is_in, is_out, class_id in zip(cross_in, cross_out, detections_valid.class_id):
+                        class_name = model.names[class_id]
+                        if is_in: in_counts[class_name] += 1
+                        if is_out: out_counts[class_name] += 1
 
-        _, buffer = cv2.imencode(".jpg", annotated_frame)
-        yield (b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n")
+                if db and cursor and hasattr(detections, 'tracker_id') and detections.tracker_id is not None:
+                    for track_id in detections.tracker_id:
+                        if track_id not in saved_ids:
+                            saved_ids.add(track_id)
+                            vehicle_number += 1
+                            try:
+                                cursor.execute(
+                                    "INSERT IGNORE INTO vehicles (vehicle_id, speed, vehicle_number) VALUES (%s,%s,%s)",
+                                    (int(track_id), 0.0, vehicle_number)
+                                )
+                                db.commit()
+                            except Exception: pass
+
+                cv2.line(annotated_frame, (DIVIDER_START.x, DIVIDER_START.y), (DIVIDER_END.x, DIVIDER_END.y), (0, 255, 255), 3)
+                line_annotator.annotate(annotated_frame, line_counter=line_zone)
+                wrong_mask = [tid in wrong_way_ids for tid in detections.tracker_id]
+
+                if any(valid_mask):
+                    det_normal = detections[np.array(valid_mask, dtype=bool)]
+                    box_annotator.color = sv.Color.GREEN
+                    annotated_frame = box_annotator.annotate(scene=annotated_frame, detections=det_normal)
+                    annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=det_normal,
+                                                               labels=[f"#{tid}" for tid in det_normal.tracker_id])
+
+                if any(wrong_mask):
+                    det_wrong = detections[np.array(wrong_mask, dtype=bool)]
+                    wrong_box_annotator = sv.BoxAnnotator(thickness=4, color=sv.Color.RED)
+                    wrong_lbl_annotator = sv.LabelAnnotator(text_scale=0.8, color=sv.Color.RED, text_color=sv.Color.WHITE)
+                    
+                    annotated_frame = wrong_box_annotator.annotate(scene=annotated_frame, detections=det_wrong)
+                    annotated_frame = wrong_lbl_annotator.annotate(scene=annotated_frame, detections=det_wrong,
+                                                                   labels=["NGUOC CHIEU"] * len(det_wrong))
+                    cv2.putText(annotated_frame, "CANH BAO: VI PHAM !!!", (400, 100), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 3)
+
+            elif mode == "speed":
+                detections = detections[polygon_zone.trigger(detections)]
+                detections = byte_track.update_with_detections(detections=detections)
+                
+                points = detections.get_anchors_coordinates(anchor=sv.Position.BOTTOM_CENTER)
+                points = view_transformer.transform_points(points=points).astype(int)
+
+                for tracker_id, [_, y] in zip(detections.tracker_id, points):
+                    coordinates[tracker_id].append(y)
+
+                labels = []
+                for tracker_id, class_id in zip(detections.tracker_id, detections.class_id):
+                    class_name = model.names[class_id]
+                    
+                    if len(coordinates[tracker_id]) < fps / 2:
+                        labels.append(f"#{tracker_id} {class_name}")
+                    else:
+                        coordinate_start = coordinates[tracker_id][-1]
+                        coordinate_end = coordinates[tracker_id][0]
+                       
+                        moved_dist = abs(coordinate_start - coordinate_end) 
+                        time_elapsed = len(coordinates[tracker_id]) / fps
+                        
+                        real_speed = moved_dist / time_elapsed * 3.6
+                        labels.append(f"#{tracker_id} {class_name} {int(real_speed)} km/h")
+
+                        all_speeds[tracker_id].append(real_speed)
+
+                current_tracked_ids = set(detections.tracker_id)
+                
+                for tid in list(all_speeds.keys()):
+                    if tid not in current_tracked_ids and tid not in saved_ids:
+                        speeds = all_speeds[tid]
+                        
+                        if len(speeds) > 0:
+                            avg_speed = sum(speeds) / len(speeds)
+                            max_speed = max(speeds)
+                            
+                            saved_ids.add(tid)
+                            vehicle_number += 1
+                            
+                            if db and cursor:
+                                try:
+                                    cursor.execute(
+                                        """
+                                        INSERT IGNORE INTO vehicles 
+                                        (vehicle_id, speed, max_speed, vehicle_number) 
+                                        VALUES (%s,%s,%s,%s)
+                                        """,
+                                        (int(tid), float(avg_speed), float(max_speed), vehicle_number)
+                                    )
+                                    db.commit()
+                                except Exception as e: 
+                                    print(f"Lỗi DB: {e}")
+                                    
+                        del all_speeds[tid] 
+
+                cv2.polylines(annotated_frame, [SOURCE.astype(np.int32)], True, (0, 0, 255), 2)
+                annotated_frame = trace_annotator.annotate(scene=annotated_frame, detections=detections)
+                annotated_frame = box_annotator.annotate(scene=annotated_frame, detections=detections)
+                annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=detections, labels=labels)
+
+            out.write(annotated_frame)
+
+            _, buffer = cv2.imencode(".jpg", annotated_frame)
+            yield (b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n")
+
+    finally:
+        cap.release()
+        out.release() 
         
-    cap.release()
-    if db and cursor:
-        cursor.close()
-        db.close()
+        try:
+            minio_client.fput_object("traffic-results", result_filename, temp_filepath)
+            print(f"Đã lưu thành công {result_filename} lên MinIO!")
+        except Exception as e:
+            print(f"Lỗi đẩy file lên MinIO: {e}")
+        finally:
+            if os.path.exists(temp_filepath):
+                os.remove(temp_filepath)
+                
+        if db and cursor:
+            cursor.close()
+            db.close()
