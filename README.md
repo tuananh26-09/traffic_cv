@@ -76,4 +76,33 @@ Lưu ý: Lần đầu khởi chạy sẽ mất khoảng 5-10 phút để Docker 
 <img width="1919" height="917" alt="image" src="https://github.com/user-attachments/assets/6d4a2192-5cf0-485b-b752-0be5022280d1" />
 <img width="1919" height="910" alt="image" src="https://github.com/user-attachments/assets/0f40ce72-b440-4e7a-af83-4792f61c5872" />
 
+## 🔄 Luồng Xử Lý Của Hệ Thống (Event Flow)
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Web as Dashboard (Trình duyệt)
+    participant API as FastAPI (Backend)
+    participant MinIO as MinIO (Storage)
+    participant AI as Lõi AI (YOLO11 + Tracker)
+    participant DB as MySQL (Database)
+
+    Web->>API: Tải file video & Thiết lập tọa độ
+    API->>MinIO: Đẩy file video thô vào bucket (traffic-videos)
+    API->>DB: Lưu cấu hình tọa độ camera
+    Web->>API: Yêu cầu "Chạy AI"
+    
+    API->>AI: Kích hoạt luồng phân tích
+    AI->>MinIO: Đọc stream trực tiếp qua Presigned URL
+    
+    rect rgb(200, 220, 240)
+        Note right of Web: Vòng lặp Xử lý Thời gian thực (Real-time)
+        loop Xử lý từng Frame ảnh
+            AI->>AI: Nhận diện, Theo dõi & Tính vận tốc
+            AI->>DB: Lưu kết quả (ID xe, Tốc độ, Vi phạm)
+            AI-->>Web: Bắn trực tiếp Frame ảnh (đã vẽ Box) lên màn hình
+        end
+    end
+
+    AI->>MinIO: Lưu video thành phẩm vào bucket (traffic-results)
+    AI-->>API: Dọn dẹp tài nguyên & Đóng kết nối
