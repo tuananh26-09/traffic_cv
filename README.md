@@ -95,7 +95,7 @@ sequenceDiagram
     API->>AI: Kích hoạt luồng phân tích
     AI->>MinIO: Đọc stream trực tiếp qua Presigned URL
     
-    rect rgb(200, 220, 240)
+    rect rgb(0,0,255)
         Note right of Web: Vòng lặp Xử lý Thời gian thực (Real-time)
         loop Xử lý từng Frame ảnh
             AI->>AI: Nhận diện, Theo dõi & Tính vận tốc
